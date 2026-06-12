@@ -1,5 +1,11 @@
 #include "systemcalls.h"
-
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <fcntl.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -17,7 +23,24 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+    if (cmd == NULL)
+    {
+        return false;
+    }
+
+    int ret = system(cmd);
+
+    if (ret == -1)
+    {
+        return false;
+    }
+
+    if (WIFEXITED(ret) && WEXITSTATUS(ret) == 0)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -47,7 +70,7 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
 /*
  * TODO:
@@ -61,7 +84,39 @@ bool do_exec(int count, ...)
 
     va_end(args);
 
-    return true;
+    fflush(stdout);
+
+    pid_t pid = fork();
+
+    if (pid == -1)
+    {
+        return false;
+    }
+
+    if (pid == 0)
+    {
+        execv(command[0], command);
+
+        /*
+         * If execv returns, it means execv failed.
+         */
+        _exit(EXIT_FAILURE);
+    }
+
+    int status;
+    pid_t wait_ret = waitpid(pid, &status, 0);
+
+    if (wait_ret == -1)
+    {
+        return false;
+    }
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -82,7 +137,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
 
 /*
@@ -95,5 +150,52 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
     va_end(args);
 
-    return true;
+    fflush(stdout);
+
+    pid_t pid = fork();
+
+    if (pid == -1)
+    {
+        return false;
+    }
+
+    if (pid == 0)
+    {
+        int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+        if (fd == -1)
+        {
+            _exit(EXIT_FAILURE);
+        }
+
+        if (dup2(fd, STDOUT_FILENO) == -1)
+        {
+            close(fd);
+            _exit(EXIT_FAILURE);
+        }
+
+        close(fd);
+
+        execv(command[0], command);
+
+        /*
+         * If execv returns, it means execv failed.
+         */
+        _exit(EXIT_FAILURE);
+    }
+
+    int status;
+    pid_t wait_ret = waitpid(pid, &status, 0);
+
+    if (wait_ret == -1)
+    {
+        return false;
+    }
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+    {
+        return true;
+    }
+
+    return false;
 }
